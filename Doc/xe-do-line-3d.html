@@ -1,0 +1,1153 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mô hình xe dò line</title>
+<style>
+  :root {
+    --bg: #eef1f5;
+    --scene: #e7ebf0;
+    --panel: rgba(255, 255, 255, 0.92);
+    --text: #1c2430;
+    --muted: #5b6675;
+    --border: #d3d9e1;
+    --accent: #0b6fe0;
+    --accent-text: #ffffff;
+    --on: #13874b;
+    --on-bg: #dcf5e7;
+    --off: #6b7480;
+    --off-bg: #eceff2;
+    --warn: #a35a00;
+    --warn-bg: #fdebd3;
+    --opp: #c62828;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10141a;
+      --scene: #151a21;
+      --panel: rgba(26, 32, 40, 0.92);
+      --text: #e6ebf1;
+      --muted: #9ba7b5;
+      --border: #2d3541;
+      --accent: #4c9bff;
+      --accent-text: #0b1220;
+      --on: #46d483;
+      --on-bg: #143523;
+      --off: #8c96a2;
+      --off-bg: #232a33;
+      --warn: #ffb35c;
+      --warn-bg: #3a2a14;
+      --opp: #ff6b6b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10141a;
+    --scene: #151a21;
+    --panel: rgba(26, 32, 40, 0.92);
+    --text: #e6ebf1;
+    --muted: #9ba7b5;
+    --border: #2d3541;
+    --accent: #4c9bff;
+    --accent-text: #0b1220;
+    --on: #46d483;
+    --on-bg: #143523;
+    --off: #8c96a2;
+    --off-bg: #232a33;
+    --warn: #ffb35c;
+    --warn-bg: #3a2a14;
+    --opp: #ff6b6b;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+  }
+  #view { position: fixed; inset: 0; }
+  #view canvas { display: block; touch-action: none; }
+  .labels { position: absolute; inset: 0; pointer-events: none; }
+
+  .lbl {
+    pointer-events: none;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .lbl.on { border-color: var(--on); color: var(--on); }
+  .lbl.off { color: var(--off); }
+  .lbl.warn { border-color: var(--warn); color: var(--warn); }
+  .lbl.opp { border-color: var(--opp); color: var(--opp); font-weight: 600; }
+  .lbl.me { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .lbl.zone { font-weight: 600; font-size: 12.5px; }
+
+  .speed { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+  .speed input { flex: 1; accent-color: var(--accent); }
+  .speed output { min-width: 2.6em; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .hide-labels .lbl { display: none; }
+
+  .panel {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    width: 320px;
+    max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 32px);
+    overflow: auto;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px 12px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  h1 { font-size: 17px; margin: 0 0 2px; letter-spacing: -0.01em; }
+  .sub { margin: 0 0 4px; color: var(--muted); font-size: 12.5px; }
+  .group-title {
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin: 12px 0 6px;
+  }
+  .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .seg.three { grid-template-columns: repeat(3, 1fr); }
+  .seg button {
+    font: inherit;
+    font-size: 13px;
+    padding: 7px 4px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .seg button:hover { border-color: var(--accent); }
+  .seg button[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-text);
+    font-weight: 600;
+  }
+  .seg button:focus-visible, .chk input:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .status {
+    margin-top: 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px;
+  }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; }
+  .row span { color: var(--muted); }
+  .row b { font-variant-numeric: tabular-nums; }
+  .pill {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 1px 9px;
+    border-radius: 999px;
+  }
+  .pill.on { color: var(--on); background: var(--on-bg); }
+  .pill.off { color: var(--off); background: var(--off-bg); }
+  .pill.warn { color: var(--warn); background: var(--warn-bg); }
+  .note { margin-top: 4px; font-size: 12.5px; color: var(--muted); min-height: 1.45em; }
+  .note.warn { color: var(--warn); font-weight: 600; }
+
+  .chk { display: flex; gap: 8px; align-items: center; margin-top: 8px; cursor: pointer; }
+  .chk input { width: 16px; height: 16px; accent-color: var(--accent); }
+
+  details { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
+  summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+  details ul { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; }
+  details li { margin: 3px 0; }
+  details b { color: var(--text); font-weight: 600; }
+
+  .err {
+    position: fixed; inset: 0; display: none; place-items: center; text-align: center;
+    padding: 24px; color: var(--muted);
+  }
+
+  @media (max-width: 640px) {
+    .panel {
+      top: auto;
+      bottom: 16px;
+      left: 16px;
+      right: 16px;
+      width: auto;
+      max-height: 46vh;
+    }
+    .lbl { font-size: 11px; padding: 1px 6px; }
+  }
+</style>
+</head>
+<body>
+<div id="view"></div>
+
+<div class="panel" role="region" aria-label="Điều khiển mô hình">
+  <h1>Sa bàn AMHS – xe dò line 2 đầu</h1>
+  <p class="sub">Kéo để xoay, cuộn hoặc chụm 2 ngón để phóng to. Mô hình minh họa, kích thước ước lượng.</p>
+
+  <div class="group-title">Xe của mình</div>
+  <div class="seg" id="modes">
+    <button data-mode="auto" aria-pressed="true">Tự động</button>
+    <button data-mode="fwd" aria-pressed="false">Tiến</button>
+    <button data-mode="rev" aria-pressed="false">Lùi</button>
+    <button data-mode="stop" aria-pressed="false">Dừng</button>
+  </div>
+
+  <div class="group-title">Xe đối thủ</div>
+  <div class="seg three" id="opp">
+    <button data-opp="ccw" aria-pressed="true">Ngược KĐH</button>
+    <button data-opp="cw" aria-pressed="false">Cùng KĐH</button>
+    <button data-opp="stop" aria-pressed="false">Đứng yên</button>
+  </div>
+
+  <div class="status" aria-live="polite">
+    <div class="row"><span>Hướng chạy</span><b id="sDir">Tiến</b></div>
+    <div class="row"><span>Dãy dò line trước</span><b id="sFront" class="pill on">BẬT</b></div>
+    <div class="row"><span>Dãy dò line sau</span><b id="sRear" class="pill off">TẮT</b></div>
+    <div class="row"><span>H1 – nhìn xuống, trước</span><b id="sH1" class="pill off">—</b></div>
+    <div class="row"><span>H2 – nhìn xuống, sau</span><b id="sH2" class="pill off">—</b></div>
+    <div class="row"><span>H3 – đầu xe</span><b id="sH3" class="pill off">—</b></div>
+    <div class="row"><span>H4 – cuối xe</span><b id="sH4" class="pill off">—</b></div>
+    <div class="row"><span>Robot 1</span><b id="sRobot" class="pill off">Rảnh</b></div>
+    <div class="row"><span>Wafer đã đặt</span><b id="sPlaced">0 / 19</b></div>
+    <div class="note" id="sNote"></div>
+  </div>
+
+  <div class="group-title">Góc nhìn</div>
+  <div class="seg" id="views">
+    <button data-view="overview" aria-pressed="false">Từ trên</button>
+    <button data-view="arena" aria-pressed="true">Sa bàn</button>
+    <button data-view="iso" aria-pressed="false">Bám xe</button>
+    <button data-view="under" aria-pressed="false">Gầm xe</button>
+  </div>
+
+  <div class="group-title">Tốc độ mô phỏng</div>
+  <label class="speed"><input type="range" id="simSpeed" min="1" max="6" step="1" value="2" aria-label="Tốc độ mô phỏng"><output id="simSpeedOut">×2</output></label>
+
+  <label class="chk"><input type="checkbox" id="cLP" checked> Dừng tại Load Port (TH1) và chờ Robot 1</label>
+  <label class="chk"><input type="checkbox" id="cLabels" checked> Hiện chú thích</label>
+  <label class="chk"><input type="checkbox" id="cFollow"> Camera bám theo xe</label>
+
+  <details>
+    <summary>Bố trí và nguyên lý</summary>
+    <ul>
+      <li><b>Sa bàn</b> 6 × 6 m. <b>Track AMHS</b> hình tròn đường kính 4,1 m, bao quanh <b>khu Wafer</b> đường kính 3,6 m với các ô Die 50 × 50 cm và Load Port.</li>
+      <li>Bên trái: Carrier Return, FOUP Stocker, khu xuất phát đội 1. Bên phải: khu xuất phát đội 2 và 2 khu đối xứng.</li>
+      <li>Xe của mình xuất phát gần khu đội 1, xe đối thủ gần khu đội 2, cùng chạy trên track.</li>
+      <li><b>2 bánh chủ động</b> ở giữa xe, <b>2 bánh mắt trâu</b> ở đầu và cuối.</li>
+      <li><b>2 dãy dò line</b> ở hai đầu. Chạy tiến bật dãy trước, chạy lùi bật dãy sau.</li>
+      <li><b>H1, H2</b> gắn trên tay đòn vươn vào phía trong track, <b>nhìn từ trên xuống</b> hàng Load Port, cách nhau 8 cm dọc thân xe. Sàn cách cảm biến 15 cm, mặt Load Port cách 9 cm.</li>
+      <li><b>TH1:</b> H1 <b>và</b> H2 cùng đo &lt; 10 cm (cùng thấy Load Port) thì xe đã nằm đúng Load Port → dừng. TH1 ưu tiên hơn TH2.</li>
+      <li><b>Robot 1:</b> khi xe dừng ở Load Port, một ô Die trống gần Load Port đó nhất <b>sáng lên</b>. Robot 1 chạy ra <b>FOUP Stocker</b> (lần lượt 3 FOUP), gắp wafer qua cửa trước của FOUP, mang vào và đặt vào ô sáng. Đặt xong, Robot 1 <b>gửi tín hiệu</b> (quả cầu xanh) về xe, xe dò line chạy tiếp rồi Robot 1 về vị trí chờ.</li>
+      <li>Đặt đủ 19 ô trắng thì sa bàn tự dọn wafer và bắt đầu lại.</li>
+      <li><b>H3</b> gắn ở đầu xe, nhìn về phía trước. <b>H4</b> gắn ở cuối xe, nhìn về phía sau.</li>
+      <li><b>Tự động (TH2):</b> cảm biến phía đang chạy tới (H3 khi tiến, H4 khi lùi) thấy xe đối thủ dưới 10 cm thì đảo chiều và đổi dãy dò line.</li>
+      <li><b>Tiến / Lùi:</b> chạy tay một chiều, dừng lại khi sắp chạm xe đối thủ.</li>
+      <li>KĐH = kim đồng hồ, tính khi nhìn từ trên xuống.</li>
+    </ul>
+  </details>
+</div>
+
+<div class="err" id="err">Không tải được thư viện 3D. Kiểm tra kết nối Internet rồi mở lại file.</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+<script>
+(function () {
+  if (!window.THREE || !THREE.OrbitControls || !THREE.CSS2DRenderer) {
+    document.getElementById('err').style.display = 'grid';
+    return;
+  }
+
+  /* ================= Renderer, scene, camera ================= */
+  const view = document.getElementById('view');
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  view.appendChild(renderer.domElement);
+
+  const labelRenderer = new THREE.CSS2DRenderer();
+  labelRenderer.setSize(innerWidth, innerHeight);
+  labelRenderer.domElement.className = 'labels';
+  view.appendChild(labelRenderer.domElement);
+
+  const scene = new THREE.Scene();
+  function applySceneTheme() {
+    const c = getComputedStyle(document.documentElement).getPropertyValue('--scene').trim();
+    scene.background = new THREE.Color(c || '#e7ebf0');
+  }
+  applySceneTheme();
+  if (window.matchMedia) {
+    const mq = matchMedia('(prefers-color-scheme: dark)');
+    if (mq.addEventListener) mq.addEventListener('change', applySceneTheme);
+    else if (mq.addListener) mq.addListener(applySceneTheme);
+  }
+
+  const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.5, 5000);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.minDistance = 12;
+  controls.maxDistance = 1600;
+  controls.maxPolarAngle = Math.PI;
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f99, 0.8));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.85);
+  sun.position.set(220, 520, 160);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(4096, 4096);
+  Object.assign(sun.shadow.camera, { left: -340, right: 340, top: 340, bottom: -340, near: 10, far: 1200 });
+  sun.shadow.bias = -0.0008;
+  scene.add(sun);
+
+  /* ================= Helpers ================= */
+  const M = (color, o) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.6, metalness: 0.05 }, o || {}));
+  function add(parent, geo, mat, x, y, z) {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x || 0, y || 0, z || 0);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    parent.add(m);
+    return m;
+  }
+  function roundedRect(w, h, r) {
+    const s = new THREE.Shape();
+    const x = -w / 2, y = -h / 2;
+    s.moveTo(x + r, y);
+    s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r);
+    s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
+    s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y);
+    return s;
+  }
+  function plate(parent, L, W, color, y, t) {
+    const g = new THREE.ExtrudeGeometry(roundedRect(L, W, 2.4), { depth: t, bevelEnabled: false });
+    g.rotateX(-Math.PI / 2);
+    return add(parent, g, M(color, { roughness: 0.35, transparent: true, opacity: 0.93 }), 0, y, 0);
+  }
+  function label(parent, text, x, y, z, cls) {
+    const div = document.createElement('div');
+    div.className = 'lbl' + (cls ? ' ' + cls : '');
+    div.textContent = text;
+    const obj = new THREE.CSS2DObject(div);
+    obj.position.set(x, y, z);
+    parent.add(obj);
+    return div;
+  }
+
+  /* ================= Sa bàn 6 × 6 m (đơn vị cm, x sang phải, z xuống dưới khi nhìn từ trên) ================= */
+  const ARENA = 600;
+  const RC = 205;                   // bán kính track AMHS (đường kính 4,1 m)
+  function flat(parent, geo, mat, x, y, z) {
+    const m = add(parent, geo, mat, x, y, z);
+    m.rotation.x = -Math.PI / 2;
+    m.castShadow = false;
+    return m;
+  }
+
+  const outsideMat = M(0xc9ced5, { roughness: 1, transparent: true });
+  flat(scene, new THREE.PlaneGeometry(1600, 1600), outsideMat, 0, -0.1, 0);
+  const floorMat = M(0xf7f7f3, { roughness: 0.95, transparent: true });
+  flat(scene, new THREE.PlaneGeometry(ARENA, ARENA), floorMat, 0, 0, 0);
+
+  const rimMat = M(0xb8651e, { roughness: 0.7 });
+  for (const [w, d, x, z] of [
+    [ARENA + 8, 4, 0, -ARENA / 2 - 2], [ARENA + 8, 4, 0, ARENA / 2 + 2],
+    [4, ARENA, -ARENA / 2 - 2, 0], [4, ARENA, ARENA / 2 + 2, 0],
+  ]) add(scene, new THREE.BoxGeometry(w, 5, d), rimMat, x, 2.5, z);
+
+  // Khu Wafer Ø3,6 m + ô Die 50 × 50 cm
+  flat(scene, new THREE.CircleGeometry(180, 128), M(0x2a93c9, { roughness: 0.8 }), 0, 0.1, 0);
+  const dieWhite = M(0xffffff, { roughness: 0.9 });
+  const dieBlack = M(0x1b1b1b, { roughness: 0.9 });
+  const dieRows = [[-1, 0, 1], [-2, -1, 0, 1, 2], [-2, -1, 0, 1, 2], [-2, -1, 0, 1, 2], [-1, 0, 1]];
+  const dieLit = M(0xfff3a6, { emissive: 0xffc400, emissiveIntensity: 0.8, roughness: 0.6 });
+  const dieCells = [];              // ô Die trắng: Robot 1 đặt wafer vào đây
+  dieRows.forEach((cols, r) => cols.forEach(c => {
+    const black = (r === 0 || r === 4) && c === 0;
+    const x = c * 65, z = (r - 2) * 65;
+    const mesh = flat(scene, new THREE.PlaneGeometry(50, 50), black ? dieBlack : dieWhite, x, 0.2, z);
+    if (!black) dieCells.push({ x, z, mesh, filled: false, wafer: null });
+  }));
+
+  // Load Port quanh mép khu Wafer (khối cao LP_H để siêu âm nhìn từ trên xuống phân biệt được với sàn)
+  const LP_R = 186, LP_SIZE = 7, LP_H = 6;
+  const lpMat = M(0x9aa1a9, { metalness: 0.4, roughness: 0.5 });
+  const loadPorts = [];
+  for (let i = 0; i < 12; i++) {
+    const a = (15 + 30 * i) * Math.PI / 180;
+    const x = LP_R * Math.cos(a), z = LP_R * Math.sin(a);
+    add(scene, new THREE.CylinderGeometry(LP_SIZE, LP_SIZE, LP_H, 8), lpMat, x, LP_H / 2, z);
+    add(scene, new THREE.CylinderGeometry(3, 3, 0.3, 24), M(0xf2d22e, { roughness: 0.6 }), x, LP_H + 0.15, z);
+    loadPorts.push({ x, z });
+  }
+
+  // Track AMHS
+  const lineMat = M(0x121212, { roughness: 0.85, transparent: true });
+  flat(scene, new THREE.RingGeometry(RC - 1.5, RC + 1.5, 256), lineMat, 0, 0.12, 0);
+
+  // Các khu chức năng
+  function frame(parent, w, d, t, mat) {
+    for (const [bw, bd, x, z] of [[w, t, 0, -d / 2 + t / 2], [w, t, 0, d / 2 - t / 2], [t, d, -w / 2 + t / 2, 0], [t, d, w / 2 - t / 2, 0]]) {
+      const b = add(parent, new THREE.BoxGeometry(bw, 0.5, bd), mat, x, 0.25, z);
+      b.castShadow = false;
+    }
+  }
+  function zone(o) {
+    const g = new THREE.Group();
+    g.position.set(o.x, 0, o.z);
+    scene.add(g);
+    if (o.fill) flat(g, new THREE.PlaneGeometry(o.w, o.d), M(o.fill, { roughness: 0.8 }), 0, 0.15, 0);
+    if (o.border) frame(g, o.w, o.d, o.bt || 4, M(o.border, { roughness: 0.7 }));
+    if (o.divider) add(g, new THREE.BoxGeometry(1.5, 0.4, o.d - 4), M(0x111111), 0, 0.3, 0).castShadow = false;
+    const n = o.items || 0;
+    for (let i = 0; i < n; i++) {
+      const z = (i - (n - 1) / 2) * (o.d - 20) / n;
+      add(g, new THREE.BoxGeometry(26, 24, 26), M(o.itemColor || 0xc9cdd2, { roughness: 0.55 }), 0, 12, z);
+      add(g, new THREE.BoxGeometry(27, 2, 27), M(0x6d737b, { roughness: 0.5 }), 0, 25, z);
+      // FOUP: cửa trước quay vào phía sân, Robot 1 gắp wafer qua cửa này
+      if (o.door) add(g, new THREE.BoxGeometry(0.6, 16, 20), M(0x2b3038, { roughness: 0.4 }), o.door * 13.1, 11, z);
+    }
+    label(g, o.title, 0, o.items ? 40 : 12, 0, 'zone');
+  }
+  zone({ x: -279, z: -180, w: 42, d: 130, border: 0x111111, items: 3, title: 'Carrier Return' });
+  zone({ x: -280, z: -12, w: 40, d: 125, border: 0xf2d22e, bt: 6, items: 3, itemColor: 0xe9ecef, door: 1, title: 'FOUP Stocker' });
+  // Vị trí 3 FOUP trong FOUP Stocker bên trái – nơi Robot 1 lấy wafer
+  const STOCKER = { x: -280, slots: [-1, 0, 1].map(i => -12 + i * (125 - 20) / 3) };
+  zone({ x: -246, z: 245, w: 96, d: 90, fill: 0xe53935, divider: true, title: 'Xuất phát đội 1' });
+  zone({ x: 255, z: -245, w: 90, d: 86, fill: 0x2140c4, divider: true, title: 'Xuất phát đội 2' });
+  zone({ x: 280, z: -17, w: 40, d: 115, border: 0xf2d22e, bt: 6, items: 3, itemColor: 0xe9ecef, door: -1, title: 'FOUP Stocker' });
+  zone({ x: 280, z: 175, w: 40, d: 135, border: 0x111111, items: 3, title: 'Carrier Return' });
+
+  label(scene, 'Khu vực Wafer Ø3,6 m', 0, 4, 150, 'zone');
+  label(scene, 'Track AMHS Ø4,1 m', RC * Math.cos(0.35), 4, RC * Math.sin(0.35), 'zone');
+  label(scene, 'Load Port', 186 * Math.cos(-Math.PI / 4), 10, 186 * Math.sin(-Math.PI / 4), 'zone');
+
+  /* ================= Xe của mình ================= */
+  const R = 3.3, WW = 2.6;          // bán kính, bề rộng bánh chủ động
+  const W = 14;
+  const PLATE_Y = 4.4, PLATE_T = 0.4, TOP = PLATE_Y + PLATE_T;
+  const WHEEL_Z = W / 2 + 0.3 + WW / 2;
+
+  function driveWheel(parent, side, hubColor) {
+    const g = new THREE.Group();
+    g.position.set(0, R, side * WHEEL_Z);
+    parent.add(g);
+    const tire = add(g, new THREE.CylinderGeometry(R, R, WW, 48), M(0x1c1c1c, { roughness: 0.92 }));
+    tire.rotation.x = Math.PI / 2;
+    const hub = add(g, new THREE.CylinderGeometry(1.9, 1.9, WW + 0.08, 32), M(hubColor, { roughness: 0.5 }));
+    hub.rotation.x = Math.PI / 2;
+    for (let i = 0; i < 3; i++) {
+      const sp = add(g, new THREE.BoxGeometry(0.42, 3.6, 0.14), M(0x888888), 0, 0, side * (WW / 2 + 0.06));
+      sp.rotation.z = i * Math.PI / 3;
+    }
+    g.userData.side = side;
+    return g;
+  }
+  function casters(parent, x) {
+    const darkMetal = M(0x3b4048, { metalness: 0.6, roughness: 0.45 });
+    const chrome = M(0xdfe3e8, { metalness: 1, roughness: 0.18 });
+    for (const s of [1, -1]) {
+      add(parent, new THREE.BoxGeometry(3.8, 0.22, 2.8), darkMetal, s * x, PLATE_Y - 0.11, 0);
+      add(parent, new THREE.CylinderGeometry(1.45, 1.15, 3.0, 28), darkMetal, s * x, PLATE_Y - 1.6, 0);
+      add(parent, new THREE.SphereGeometry(0.95, 28, 20), chrome, s * x, 0.95, 0);
+    }
+  }
+
+  const car = new THREE.Group();
+  scene.add(car);
+  plate(car, 27, W, 0x2f6fd0, PLATE_Y, PLATE_T);
+
+  const myWheels = [];
+  const yellow = M(0xf1c232, { roughness: 0.55 });
+  for (const side of [1, -1]) {
+    myWheels.push(driveWheel(car, side, 0xf1c232));
+    add(car, new THREE.BoxGeometry(6.4, 2.2, 1.9), yellow, 0.4, R, side * 4.7);
+    const can = add(car, new THREE.CylinderGeometry(1.0, 1.0, 2.4, 24), M(0xc7ccd3, { metalness: 0.8, roughness: 0.3 }), -3.9, R, side * 4.7);
+    can.rotation.z = Math.PI / 2;
+    const shaft = add(car, new THREE.CylinderGeometry(0.3, 0.3, 2.2, 12), M(0xf5f5f5), 0, R, side * 6.6);
+    shaft.rotation.x = Math.PI / 2;
+  }
+  casters(car, 9.5);
+
+  // Dãy dò line: s = 1 đầu xe, s = -1 cuối xe
+  const BAR_Y = 1.5;
+  function makeArray(s) {
+    const g = new THREE.Group();
+    g.position.set(s * 12.4, 0, 0);
+    car.add(g);
+    const ledMat = M(0x5a1010, { emissive: 0xff2a1a, emissiveIntensity: 0, roughness: 0.3 });
+    const beamMat = new THREE.MeshBasicMaterial({ color: 0xff3a24, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide });
+    const spotMat = new THREE.MeshBasicMaterial({ color: 0xff3a24, transparent: true, opacity: 0.32, depthWrite: false });
+    const lampMat = M(0x777777, { emissive: 0x18c060, emissiveIntensity: 0 });
+
+    add(g, new THREE.BoxGeometry(2.2, 0.16, 13), M(0x1f7a3a, { roughness: 0.5 }), 0, BAR_Y, 0);
+    for (const z of [-5.6, 5.6]) {
+      add(g, new THREE.CylinderGeometry(0.22, 0.22, PLATE_Y - BAR_Y, 12), M(0xc9a64a, { metalness: 0.8, roughness: 0.3 }), -s * 0.6, (PLATE_Y + BAR_Y) / 2, z);
+    }
+    add(g, new THREE.BoxGeometry(0.55, 0.85, 2.8), M(0x1a1a1a), 0.3 * s, BAR_Y + 0.5, 3.6);
+    add(g, new THREE.BoxGeometry(0.35, 0.5, 2.6), M(0x222222), -0.4 * s, BAR_Y + 0.33, -2.2);
+    add(g, new THREE.SphereGeometry(0.38, 18, 12), lampMat, -0.3 * s, BAR_Y + 0.42, -5.4);
+
+    for (let i = 0; i < 8; i++) {
+      const z = (i - 3.5) * 1.5;
+      add(g, new THREE.CylinderGeometry(0.28, 0.28, 0.25, 16), M(0xcf8b4a, { roughness: 0.4 }), 0, BAR_Y - 0.2, z);
+      for (const dx of [-0.62, 0.62]) add(g, new THREE.CylinderGeometry(0.22, 0.22, 0.4, 16), ledMat, dx, BAR_Y - 0.28, z);
+      const h = BAR_Y - 0.5;
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.85, h, 18, 1, true), beamMat);
+      beam.position.set(0, h / 2 + 0.02, z);
+      g.add(beam);
+      const spot = new THREE.Mesh(new THREE.CircleGeometry(0.95, 24), spotMat);
+      spot.rotation.x = -Math.PI / 2;
+      spot.position.set(0, 0.035, z);
+      g.add(spot);
+    }
+    return { ledMat, beamMat, spotMat, lampMat };
+  }
+  const front = makeArray(1);
+  const rear = makeArray(-1);
+
+  // Cảm biến siêu âm HC-SR05: s = 1 (H3, đầu xe, nhìn trước), s = -1 (H4, cuối xe, nhìn sau)
+  const SONAR_X = 12.3, SONAR_Y = TOP + 1.4, CONE_LEN = 26;
+  function makeSonar(s) {
+    add(car, new THREE.BoxGeometry(1.2, 0.5, 4.8), M(0x30353c), s * (SONAR_X - 0.6), TOP + 0.25, 0);           // chân đế
+    add(car, new THREE.BoxGeometry(0.16, 2.1, 4.6), M(0x1b5fb8, { roughness: 0.45 }), s * SONAR_X, SONAR_Y, 0);  // PCB
+    for (const z of [-1.3, 1.3]) {
+      const t = add(car, new THREE.CylinderGeometry(0.8, 0.8, 1.2, 28), M(0xd5d9de, { metalness: 0.85, roughness: 0.25 }), s * (SONAR_X + 0.65), SONAR_Y, z);
+      t.rotation.z = Math.PI / 2;
+      const mesh = add(car, new THREE.CylinderGeometry(0.62, 0.62, 0.05, 24), M(0x2b2b2b, { roughness: 0.9 }), s * (SONAR_X + 1.27), SONAR_Y, z);
+      mesh.rotation.z = Math.PI / 2;
+    }
+    const coneMat = new THREE.MeshBasicMaterial({ color: 0x29b36a, transparent: true, opacity: 0.10, depthWrite: false, side: THREE.DoubleSide });
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(5.5, CONE_LEN, 32, 1, true), coneMat);
+    cone.rotation.z = s > 0 ? Math.PI / 2 : -Math.PI / 2;    // đỉnh nón ở cảm biến, miệng nón hướng ra ngoài
+    cone.position.set(s * (SONAR_X + 1.3 + CONE_LEN / 2), SONAR_Y, 0);
+    car.add(cone);
+    return coneMat;
+  }
+  const coneH3 = makeSonar(1);
+  const coneH4 = makeSonar(-1);
+
+  // H1, H2: siêu âm NHÌN XUỐNG, gắn trên tay đòn vươn vào phía trong track (bên phải xe),
+  // nằm đúng phía trên hàng Load Port. H1 phía trước, H2 phía sau.
+  const DOWN_Z = RC - LP_R;          // 19 cm: tay đòn vươn tới bán kính Load Port
+  const DOWN_Y = 15;                 // độ cao mặt cảm biến so với sàn
+  const DOWN_X = [4, -4];            // vị trí dọc thân xe của H1, H2
+  const armMat = M(0x30353c, { metalness: 0.3, roughness: 0.5 });
+  add(car, new THREE.BoxGeometry(1.4, DOWN_Y + 2.6 - TOP, 1.4), armMat, 0, (DOWN_Y + 2.6 + TOP) / 2, 4.5);   // cột
+  add(car, new THREE.BoxGeometry(14, 0.8, DOWN_Z - 2), armMat, 0, DOWN_Y + 2.6, (DOWN_Z + 6) / 2);           // tay đòn
+  const downCones = DOWN_X.map(sx => {
+    add(car, new THREE.BoxGeometry(4.6, 0.16, 2.1), M(0x1b5fb8, { roughness: 0.45 }), sx, DOWN_Y + 2.0, DOWN_Z);  // PCB nằm ngang
+    for (const dx of [-1.3, 1.3]) {
+      add(car, new THREE.CylinderGeometry(0.8, 0.8, 1.2, 28), M(0xd5d9de, { metalness: 0.85, roughness: 0.25 }), sx + dx, DOWN_Y + 1.3, DOWN_Z);
+      add(car, new THREE.CylinderGeometry(0.62, 0.62, 0.05, 24), M(0x2b2b2b, { roughness: 0.9 }), sx + dx, DOWN_Y + 0.68, DOWN_Z);
+    }
+    const mat = new THREE.MeshBasicMaterial({ color: 0x29b36a, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide });
+    const hgt = DOWN_Y - 0.7;
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(3, hgt, 28, 1, true), mat);   // đỉnh ở cảm biến, miệng ở sàn
+    cone.position.set(sx, hgt / 2, DOWN_Z);
+    car.add(cone);
+    return mat;
+  });
+  const lblH1 = label(car, 'H1', DOWN_X[0] + 1, DOWN_Y + 5.5, DOWN_Z + 1);
+  const lblH2 = label(car, 'H2', DOWN_X[1] - 1, DOWN_Y + 5.5, DOWN_Z + 1);
+
+  // Linh kiện trên thân
+  add(car, new THREE.BoxGeometry(7, 1.5, 4.4), M(0x1d1f22), -6.6, TOP + 0.75, 0);
+  for (const z of [-1.05, 1.05]) {
+    const cell = add(car, new THREE.CylinderGeometry(0.92, 0.92, 5.8, 24), M(0x1d9a6c, { roughness: 0.4 }), -6.6, TOP + 1.45, z);
+    cell.rotation.z = Math.PI / 2;
+  }
+  add(car, new THREE.BoxGeometry(6.0, 0.16, 2.8), M(0x22262d), 0.6, TOP + 0.58, 0);
+  add(car, new THREE.BoxGeometry(2.4, 0.36, 1.8), M(0xc4c9d0, { metalness: 0.85, roughness: 0.3 }), -0.9, TOP + 0.84, 0);
+  for (const z of [-1.25, 1.25]) add(car, new THREE.BoxGeometry(5.4, 0.3, 0.25), M(0x111111), 0.6, TOP + 0.45, z);
+  add(car, new THREE.BoxGeometry(3.6, 0.16, 4.0), M(0xc0262d), 6.4, TOP + 0.45, 0);
+  add(car, new THREE.BoxGeometry(0.5, 2.0, 3.2), M(0x16181b, { metalness: 0.5 }), 6.9, TOP + 1.5, 0);
+
+  // Mũi tên hướng chạy
+  const arrow = new THREE.Group();
+  const arrowMat = M(0x18b061, { emissive: 0x0b5a30, emissiveIntensity: 0.4 });
+  const aShaft = add(arrow, new THREE.CylinderGeometry(0.35, 0.35, 4, 16), arrowMat, -0.6, 0, 0);
+  aShaft.rotation.z = Math.PI / 2;
+  const aHead = add(arrow, new THREE.ConeGeometry(0.95, 1.9, 24), arrowMat, 2.3, 0, 0);
+  aHead.rotation.z = -Math.PI / 2;
+  arrow.position.set(0, 12, 0);
+  car.add(arrow);
+
+  label(car, 'Xe của mình', 0, 15, 0, 'me');
+  const lblFront = label(car, 'Dò line TRƯỚC', 13.2, BAR_Y, -8.6, 'on');
+  const lblRear = label(car, 'Dò line SAU', -13.2, BAR_Y, -8.6, 'off');
+  const lblH3 = label(car, 'H3 (đầu xe)', SONAR_X + 1, SONAR_Y + 2.6, 0);
+  const lblH4 = label(car, 'H4 (cuối xe)', -SONAR_X - 1, SONAR_Y + 2.6, 0);
+  label(car, 'Bánh mắt trâu', 9.5, 0.5, 4.2);
+  label(car, 'Bánh mắt trâu', -9.5, 0.5, 4.2);
+
+  /* ================= Xe đối thủ ================= */
+  const opp = new THREE.Group();
+  scene.add(opp);
+  plate(opp, 26, W, 0xc62828, PLATE_Y, PLATE_T);
+  const oppWheels = [driveWheel(opp, 1, 0x9e9e9e), driveWheel(opp, -1, 0x9e9e9e)];
+  casters(opp, 9.5);
+  add(opp, new THREE.BoxGeometry(14, 3.2, 10), M(0x3a3f47, { roughness: 0.5 }), -1, TOP + 1.6, 0);
+  add(opp, new THREE.BoxGeometry(5, 2.2, 9), M(0x7fb3ff, { roughness: 0.15, metalness: 0.2, transparent: true, opacity: 0.85 }), 6.5, TOP + 1.1, 0);
+  for (const z of [-4.5, 4.5]) add(opp, new THREE.BoxGeometry(0.4, 0.8, 2), M(0xfff3b0, { emissive: 0xffe680, emissiveIntensity: 0.8 }), 13, TOP - 0.2, z);
+  label(opp, 'Xe đối thủ', 0, 12, 0, 'opp');
+
+  /* ================= Robot 1: lấy wafer ở Load Port, đặt vào ô Die đang sáng ================= */
+  const R_RET = 18, R_EXT = 40;     // khoảng cách từ tâm robot tới tay gắp: thu vào / vươn ra
+  const ARM_Y = 11.8;               // độ cao tay gắp
+  const WAFER_R = 10;               // wafer Ø200 mm
+  const robot = new THREE.Group();
+  scene.add(robot);
+  add(robot, new THREE.CylinderGeometry(15.3, 15.3, 2.2, 40), M(0x2b2f36), 0, 2.4, 0);                  // cản va
+  add(robot, new THREE.CylinderGeometry(15, 15, 8, 40), M(0xeef1f4, { roughness: 0.4 }), 0, 6.6, 0);     // thân
+  add(robot, new THREE.CylinderGeometry(13, 13, 0.8, 40), M(0x6a4cff, { roughness: 0.4 }), 0, 11, 0);    // nắp
+  for (const z of [-13.2, 13.2]) {
+    const w = add(robot, new THREE.CylinderGeometry(3, 3, 2, 24), M(0x1c1c1c, { roughness: 0.9 }), 0, 3, z);
+    w.rotation.x = Math.PI / 2;
+  }
+  add(robot, new THREE.BoxGeometry(3, 3, 3), M(0x3a3f47), 8, 12.4, 0);                                   // khớp tay
+  const robotLampMat = M(0x777777, { emissive: 0x18c060, emissiveIntensity: 1.2 });
+  add(robot, new THREE.SphereGeometry(1.6, 18, 12), robotLampMat, -6, 12.6, 0);
+  const armBar = add(robot, new THREE.BoxGeometry(1, 1.2, 2.4), M(0x9aa3ad, { metalness: 0.6, roughness: 0.35 }), 0, ARM_Y, 0);
+  const gripper = new THREE.Group();
+  robot.add(gripper);
+  add(gripper, new THREE.BoxGeometry(1.2, 1.2, 9), M(0x3a3f47), 0, ARM_Y, 0);
+  for (const z of [-4, 4]) add(gripper, new THREE.BoxGeometry(5, 1, 1), M(0x3a3f47), 2.2, ARM_Y - 0.4, z);
+  label(robot, 'Robot 1', 0, 22, 0, 'me');
+
+  const waferMat = M(0xc3ccd8, { metalness: 0.9, roughness: 0.18 });
+  function newWafer() {
+    const w = add(scene, new THREE.CylinderGeometry(WAFER_R, WAFER_R, 0.6, 48), waferMat);
+    w.visible = false;
+    return w;
+  }
+  const signalMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+  const signal = new THREE.Mesh(new THREE.SphereGeometry(2.2, 20, 14), signalMat);
+  signal.visible = false;
+  scene.add(signal);
+
+  /* ================= Bật / tắt dãy dò line ================= */
+  function setArray(a, on) {
+    a.ledMat.emissiveIntensity = on ? 2.2 : 0;
+    a.ledMat.color.setHex(on ? 0xff6655 : 0x5a1010);
+    a.beamMat.visible = on;
+    a.spotMat.visible = on;
+    a.lampMat.emissiveIntensity = on ? 1.6 : 0;
+    a.lampMat.color.setHex(on ? 0x28d77a : 0x777777);
+  }
+
+  /* ================= Mô phỏng chuyển động ================= */
+  const SPEED = 30;                 // tốc độ xe mình (cm/s)
+  const SPEED_O = 20;               // tốc độ xe đối thủ
+  const DETECT = 10;                // ngưỡng TH2 (cm)
+  const HALF_ME = 13.6 + 0.9;       // nửa chiều dài xe mình, tính tới mặt cảm biến siêu âm
+  const HALF_OPP = 13.4;
+  const SHOW_MAX = 120;             // xa hơn mức này hiển thị "—"
+
+  let mode = 'auto';
+  let dir = 1;                      // 1 = tiến, -1 = lùi; quyết định dãy dò line nào bật
+  let theta = 3 * Math.PI / 4 + 0.12; // xe mình: gần khu xuất phát đội 1 (góc dưới trái); tăng = chiều kim đồng hồ nhìn từ trên
+  let oppMode = 'ccw';
+  let oppFacing = -1;               // xe đối thủ quay mặt theo chiều +θ (1) hay -θ (-1)
+  let thetaO = -Math.PI / 4;        // xe đối thủ: gần khu xuất phát đội 2 (góc trên phải)
+  let simTime = 0, lastFlip = -10, flipNoteUntil = -1;
+
+  const TAU = Math.PI * 2;
+  function wrap(a) {
+    a = (a + Math.PI) % TAU;
+    if (a < 0) a += TAU;
+    return a - Math.PI;
+  }
+  // Khoảng trống giữa 2 xe đo dọc theo đường line
+  function gaps() {
+    const d = wrap(thetaO - theta) * RC;       // > 0: đối thủ nằm phía +θ (phía đầu xe mình)
+    const g = Math.max(0, Math.abs(d) - HALF_ME - HALF_OPP);
+    return { d, front: d > 0 ? g : Infinity, rear: d < 0 ? g : Infinity };
+  }
+  /*
+   * TH1 – đọc H1, H2 (nhìn xuống). Cảm biến thấy Load Port khi điểm ngay dưới nó nằm trên mặt Load Port.
+   * Trả về khoảng cách đo được (cm): 9 cm nếu thấy Load Port, 15 cm nếu chỉ thấy sàn.
+   */
+  const LP_DETECT = 10;             // ngưỡng TH1 (cm)
+  function downSensors(th) {
+    const c = new THREE.Vector2(RC * Math.cos(th), RC * Math.sin(th));
+    const tan = new THREE.Vector2(-Math.sin(th), Math.cos(th));     // hướng đầu xe
+    const inward = new THREE.Vector2(-Math.cos(th), -Math.sin(th)); // bên phải xe = phía trong track
+    return DOWN_X.map(sx => {
+      const p = c.clone().addScaledVector(tan, sx).addScaledVector(inward, DOWN_Z);
+      const onPort = loadPorts.some(lp => Math.hypot(lp.x - p.x, lp.z - p.y) < LP_SIZE * 0.9);
+      return onPort ? DOWN_Y - LP_H : DOWN_Y;
+    });
+  }
+  let lpState = 'none';             // none | wait (dừng, chờ Robot 1) | leave (đang rời Load Port vừa dừng)
+  let transferDone = false;         // "tín hiệu" Robot 1 gửi về: đã đặt wafer xong
+  let lpDoneNoteUntil = -1;
+  let placedCount = 0;
+
+  /* ---------- Robot 1 ---------- */
+  const ROBOT_SPEED = 40;           // cm/s
+  const ROBOT_TURN = Math.PI;       // rad/s
+  const HOME = { x: 0, z: 0 };
+  const rb = { x: HOME.x, z: HOME.z, psi: -Math.PI / 2, ext: 0, queue: [], cur: null, busy: false, pending: null, wafer: null, carrying: false, status: 'Rảnh' };
+
+  function gripperPos() {
+    const L = R_RET + (R_EXT - R_RET) * rb.ext;
+    return { x: rb.x + Math.cos(rb.psi) * L, z: rb.z + Math.sin(rb.psi) * L };
+  }
+  function nearestLoadPort(th) {
+    let best = 0, bestD = Infinity;
+    loadPorts.forEach((lp, i) => {
+      const d = Math.abs(wrap(Math.atan2(lp.z, lp.x) - th));
+      if (d < bestD) { bestD = d; best = i; }
+    });
+    return best;
+  }
+  // Ô trống gần Load Port nhất; đầy hết thì dọn sạch wafer và bắt đầu lại
+  function pickCell(lp) {
+    let free = dieCells.filter(c => !c.filled);
+    if (!free.length) {
+      dieCells.forEach(c => { c.filled = false; if (c.wafer) { scene.remove(c.wafer); c.wafer = null; } });
+      placedCount = 0;
+      free = dieCells.slice();
+    }
+    free.sort((a, b) => Math.hypot(a.x - lp.x, a.z - lp.z) - Math.hypot(b.x - lp.x, b.z - lp.z));
+    return free[0];
+  }
+
+  /*
+   * Xe dò line dừng ở Load Port lpIdx -> giao việc cho Robot 1:
+   * sáng ô Die đích -> ra FOUP Stocker gắp wafer qua cửa FOUP -> mang vào đặt vào ô sáng
+   * -> gửi tín hiệu cho xe -> về vị trí chờ.
+   */
+  let foupTurn = 0;                 // lấy lần lượt ở 3 FOUP
+  function requestTransfer(lpIdx) {
+    if (rb.busy) { rb.pending = lpIdx; return; }
+    rb.busy = true;
+    const lp = loadPorts[lpIdx];
+    const cell = pickCell(lp);
+    const slotZ = STOCKER.slots[foupTurn++ % STOCKER.slots.length];
+    const foup = { x: STOCKER.x, z: slotZ };
+    const atFoup = { x: STOCKER.x + R_EXT, z: slotZ };          // đứng trước cửa FOUP, tay gắp vươn vào trong
+    let vx = atFoup.x - cell.x, vz = atFoup.z - cell.z;
+    const vl = Math.hypot(vx, vz) || 1;
+    const atCell = { x: cell.x + vx / vl * R_EXT, z: cell.z + vz / vl * R_EXT };
+    const HOLD_Y = ARM_Y - 1.2;
+    let from = null;
+
+    rb.cur = null;
+    rb.queue = [
+      { type: 'anim', dur: 0.3, status: 'Nhận lệnh, bật sáng ô Die',
+        start() { cell.mesh.material = dieLit; },
+        fn() {} },
+      { type: 'goto', x: atFoup.x, z: atFoup.z, status: 'Tới FOUP Stocker' },
+      { type: 'face', x: foup.x, z: foup.z },
+      { type: 'arm', to: 1, dur: 0.6, status: 'Gắp wafer trong FOUP',
+        end() {
+          rb.wafer = newWafer();                                    // wafer nằm trong FOUP, ngay tại tay gắp
+          rb.wafer.visible = true;
+          rb.carrying = true;
+          rb.wafer.position.set(foup.x, HOLD_Y, foup.z);
+        } },
+      { type: 'arm', to: 0, dur: 0.6, status: 'Rút wafer ra khỏi FOUP' },
+      { type: 'goto', x: atCell.x, z: atCell.z, status: 'Mang wafer tới ô đang sáng' },
+      { type: 'face', x: cell.x, z: cell.z },
+      { type: 'arm', to: 1, dur: 0.6, status: 'Đặt wafer vào ô sáng' },
+      { type: 'anim', dur: 0.5,
+        start() { rb.carrying = false; from = rb.wafer.position.clone(); },
+        fn(k) { rb.wafer.position.set(from.x + (cell.x - from.x) * k, from.y + (0.55 - from.y) * k, from.z + (cell.z - from.z) * k); },
+        end() {
+          cell.filled = true;
+          cell.wafer = rb.wafer;
+          rb.wafer = null;
+          cell.mesh.material = dieWhite;
+          placedCount++;
+        } },
+      { type: 'arm', to: 0, dur: 0.5 },
+      { type: 'anim', dur: 0.7, status: 'Gửi tín hiệu cho xe dò line',
+        start() { signal.visible = true; from = new THREE.Vector3(rb.x, 22, rb.z); },
+        fn(k) {
+          const to = new THREE.Vector3(RC * Math.cos(theta), 18, RC * Math.sin(theta));
+          signal.position.lerpVectors(from, to, k);
+          signal.position.y += Math.sin(Math.PI * k) * 25;
+        },
+        end() { signal.visible = false; transferDone = true; rb.busy = false; } },
+      { type: 'goto', x: HOME.x, z: HOME.z, status: 'Về vị trí chờ' },
+    ];
+  }
+
+  /* Chạy 1 bước nhỏ trong hàng đợi việc của Robot 1 */
+  function robotStep(h) {
+    if (!rb.busy && rb.pending !== null) {
+      const p = rb.pending;
+      rb.pending = null;
+      requestTransfer(p);
+    }
+    if (!rb.cur && rb.queue.length) {
+      rb.cur = rb.queue.shift();
+      rb.cur.t = 0;
+      if (rb.cur.status) rb.status = rb.cur.status;
+      if (rb.cur.type === 'arm') rb.cur.from = rb.ext;
+      if (rb.cur.start) rb.cur.start();
+    }
+    const a = rb.cur;
+    if (!a) { rb.status = 'Rảnh'; return; }
+    a.t += h;
+    let done = false;
+    if (a.type === 'goto') {
+      const dx = a.x - rb.x, dz = a.z - rb.z, dist = Math.hypot(dx, dz);
+      if (dist < 0.5) done = true;
+      else {
+        const e = wrap(Math.atan2(dz, dx) - rb.psi);
+        if (Math.abs(e) > 0.03) rb.psi += Math.sign(e) * Math.min(Math.abs(e), ROBOT_TURN * h);   // quay tại chỗ trước
+        else {
+          const s = Math.min(dist, ROBOT_SPEED * h);
+          rb.x += Math.cos(rb.psi) * s;
+          rb.z += Math.sin(rb.psi) * s;
+        }
+      }
+    } else if (a.type === 'face') {
+      const e = wrap(Math.atan2(a.z - rb.z, a.x - rb.x) - rb.psi);
+      if (Math.abs(e) < 0.01) done = true;
+      else rb.psi += Math.sign(e) * Math.min(Math.abs(e), ROBOT_TURN * h);
+    } else if (a.type === 'arm') {
+      const k = Math.min(1, a.t / a.dur);
+      rb.ext = a.from + (a.to - a.from) * k;
+      done = k >= 1;
+    } else if (a.type === 'anim') {
+      const k = Math.min(1, a.t / a.dur);
+      a.fn(k);
+      done = k >= 1;
+    }
+    if (rb.carrying && rb.wafer) {
+      const g = gripperPos();
+      rb.wafer.position.set(g.x, ARM_Y - 1.2, g.z);
+    }
+    if (done) {
+      if (a.end) a.end();
+      rb.cur = null;
+    }
+  }
+
+  /* Cập nhật hình Robot 1 theo trạng thái */
+  function drawRobot() {
+    robot.position.set(rb.x, 0, rb.z);
+    robot.rotation.y = -rb.psi;
+    const L = R_RET + (R_EXT - R_RET) * rb.ext;
+    armBar.scale.x = L - 8;
+    armBar.position.x = (8 + L) / 2;
+    gripper.position.x = L;
+    const busy = rb.busy || rb.cur;
+    robotLampMat.emissive.setHex(busy ? 0xff8a1f : 0x18c060);
+  }
+
+  function placeOnCircle(obj, th, facing) {
+    obj.position.set(RC * Math.cos(th), 0, RC * Math.sin(th));
+    obj.rotation.y = -th - Math.PI / 2 + (facing < 0 ? Math.PI : 0);
+  }
+
+  /* ================= Giao diện ================= */
+  const ui = {
+    dir: document.getElementById('sDir'),
+    front: document.getElementById('sFront'),
+    rear: document.getElementById('sRear'),
+    robot: document.getElementById('sRobot'),
+    placed: document.getElementById('sPlaced'),
+    h1: document.getElementById('sH1'),
+    h2: document.getElementById('sH2'),
+    h3: document.getElementById('sH3'),
+    h4: document.getElementById('sH4'),
+    note: document.getElementById('sNote'),
+  };
+  function setPressed(groupId, attr, value) {
+    document.querySelectorAll('#' + groupId + ' button').forEach(b => {
+      b.setAttribute('aria-pressed', String(b.dataset[attr] === value));
+    });
+  }
+  document.getElementById('modes').addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    mode = b.dataset.mode;
+    if (mode === 'fwd') dir = 1;
+    if (mode === 'rev') dir = -1;
+    setPressed('modes', 'mode', mode);
+  });
+  document.getElementById('opp').addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    oppMode = b.dataset.opp;
+    if (oppMode === 'cw') oppFacing = 1;
+    if (oppMode === 'ccw') oppFacing = -1;
+    setPressed('opp', 'opp', oppMode);
+  });
+
+  function fmtDist(g) {
+    return g > SHOW_MAX ? '—' : Math.round(g) + ' cm';
+  }
+  let lastKey = '';
+  function showStatus(moving, gp, hd, dwelling, note, warn) {
+    const h3Hit = gp.front < DETECT, h4Hit = gp.rear < DETECT;
+    const key = [dir, moving, Math.round(Math.min(gp.front, 999)), Math.round(Math.min(gp.rear, 999)), hd[0], hd[1], dwelling, note, rb.status, placedCount].join('|');
+    if (key === lastKey) return;
+    lastKey = key;
+
+    ui.robot.textContent = rb.status;
+    ui.robot.className = 'pill ' + (rb.status === 'Rảnh' ? 'off' : 'warn');
+    ui.placed.textContent = placedCount + ' / ' + dieCells.length;
+
+    [[ui.h1, lblH1, 'H1', hd[0], downCones[0]], [ui.h2, lblH2, 'H2', hd[1], downCones[1]]].forEach(([pill, lbl, name, d, mat]) => {
+      const hit = d < LP_DETECT;
+      pill.textContent = d + ' cm' + (hit ? ' · Load Port' : '');
+      pill.className = 'pill ' + (hit ? 'warn' : 'on');
+      lbl.textContent = name + ' · ' + d + ' cm';
+      lbl.className = 'lbl' + (hit ? ' warn' : '');
+      mat.color.setHex(hit ? 0xff8a1f : 0x29b36a);
+      mat.opacity = hit ? 0.3 : 0.12;
+    });
+
+    setArray(front, dir > 0);
+    setArray(rear, dir < 0);
+    ui.dir.textContent = !moving ? 'Đứng yên' : dir > 0 ? 'Tiến' : 'Lùi';
+    ui.front.textContent = dir > 0 ? 'BẬT' : 'TẮT';
+    ui.front.className = 'pill ' + (dir > 0 ? 'on' : 'off');
+    ui.rear.textContent = dir < 0 ? 'BẬT' : 'TẮT';
+    ui.rear.className = 'pill ' + (dir < 0 ? 'on' : 'off');
+    ui.h3.textContent = fmtDist(gp.front);
+    ui.h3.className = 'pill ' + (h3Hit ? 'warn' : gp.front <= SHOW_MAX ? 'on' : 'off');
+    ui.h4.textContent = fmtDist(gp.rear);
+    ui.h4.className = 'pill ' + (h4Hit ? 'warn' : gp.rear <= SHOW_MAX ? 'on' : 'off');
+
+    lblFront.textContent = 'Dò line TRƯỚC · ' + (dir > 0 ? 'BẬT' : 'TẮT');
+    lblFront.className = 'lbl ' + (dir > 0 ? 'on' : 'off');
+    lblRear.textContent = 'Dò line SAU · ' + (dir < 0 ? 'BẬT' : 'TẮT');
+    lblRear.className = 'lbl ' + (dir < 0 ? 'on' : 'off');
+    lblH3.textContent = 'H3 (đầu xe) · ' + fmtDist(gp.front);
+    lblH3.className = 'lbl' + (h3Hit ? ' warn' : '');
+    lblH4.textContent = 'H4 (cuối xe) · ' + fmtDist(gp.rear);
+    lblH4.className = 'lbl' + (h4Hit ? ' warn' : '');
+
+    coneH3.color.setHex(h3Hit ? 0xff8a1f : 0x29b36a);
+    coneH3.opacity = h3Hit ? 0.28 : gp.front <= CONE_LEN ? 0.16 : 0.08;
+    coneH4.color.setHex(h4Hit ? 0xff8a1f : 0x29b36a);
+    coneH4.opacity = h4Hit ? 0.28 : gp.rear <= CONE_LEN ? 0.16 : 0.08;
+
+    arrow.rotation.y = dir > 0 ? 0 : Math.PI;
+    arrowMat.color.setHex(moving ? 0x18b061 : 0x8a939e);
+    arrowMat.emissiveIntensity = moving ? 0.4 : 0;
+
+    ui.note.textContent = note || '';
+    ui.note.className = 'note' + (warn ? ' warn' : '');
+  }
+
+  /* ================= Góc nhìn ================= */
+  const cFollow = document.getElementById('cFollow');
+  const cLabels = document.getElementById('cLabels');
+  const cLP = document.getElementById('cLP');
+  cLabels.addEventListener('change', () => document.body.classList.toggle('hide-labels', !cLabels.checked));
+
+  function carFrame() {
+    const p = car.position.clone();
+    const out = new THREE.Vector3(Math.cos(theta), 0, Math.sin(theta));   // hướng ra ngoài vòng tròn
+    const tan = new THREE.Vector3(-Math.sin(theta), 0, Math.cos(theta));  // hướng đầu xe
+    return { p, out, tan };
+  }
+  function fitDistance(radius) {
+    const half = THREE.MathUtils.degToRad(camera.fov / 2);
+    return radius / Math.min(Math.tan(half), Math.tan(half) * camera.aspect);
+  }
+  function viewPose(name) {
+    if (name === 'overview') {
+      return { pos: new THREE.Vector3(0.01, fitDistance(340), 0.01), tgt: new THREE.Vector3(0, 0, 0) };
+    }
+    if (name === 'arena') {
+      const d = fitDistance(330) * 1.05;
+      return { pos: new THREE.Vector3(0, d * 0.78, d * 0.72), tgt: new THREE.Vector3(0, 0, 20) };
+    }
+    const f = carFrame();
+    const tgt = f.p.clone().setY(name === 'under' ? 1.5 : 3);
+    const pos = f.p.clone();
+    if (name === 'iso') pos.addScaledVector(f.out, 45).addScaledVector(f.tan, 28).setY(30);
+    if (name === 'under') pos.addScaledVector(f.out, 26).addScaledVector(f.tan, 12).setY(-20);
+    return { pos, tgt };
+  }
+  let camAnim = null;
+  function goView(name) {
+    const v = viewPose(name);
+    camAnim = { t: 0, fromPos: camera.position.clone(), fromTgt: controls.target.clone(), toPos: v.pos, toTgt: v.tgt };
+    cFollow.checked = name === 'iso' || name === 'under';
+    setPressed('views', 'view', name);
+  }
+
+  const simSpeed = document.getElementById('simSpeed');
+  const simSpeedOut = document.getElementById('simSpeedOut');
+  simSpeed.addEventListener('input', () => { simSpeedOut.textContent = '×' + simSpeed.value; });
+  document.getElementById('views').addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (b) goView(b.dataset.view);
+  });
+
+  /* ================= Vòng lặp ================= */
+  placeOnCircle(car, theta, 1);
+  placeOnCircle(opp, thetaO, oppFacing);
+  {
+    const v = viewPose('arena');
+    camera.position.copy(v.pos);
+    controls.target.copy(v.tgt);
+  }
+
+  /* Một bước mô phỏng nhỏ (h giây). Trả về thông tin để hiển thị. */
+  function step(h) {
+    simTime += h;
+
+    /* ---- Xe đối thủ ---- */
+    let gp = gaps();
+    let vo = 0;
+    if (oppMode !== 'stop') {
+      // Đối thủ dừng lại nếu sắp chạm xe mình ở phía nó đang chạy tới
+      const blocked = (oppFacing > 0 && gp.d < 0 || oppFacing < 0 && gp.d > 0) && Math.abs(gp.d) - HALF_ME - HALF_OPP < 1;
+      vo = blocked ? 0 : oppFacing * SPEED_O;
+    }
+    const dThO = vo * h / RC;
+    thetaO = wrap(thetaO + dThO);
+
+    /* ---- Xe của mình ---- */
+    gp = gaps();
+    let v = 0, note = '', warn = false;
+
+    // TH1 (ưu tiên cao nhất): H1 và H2 cùng thấy Load Port -> dừng, giao việc cho Robot 1,
+    // chờ tín hiệu "đặt xong" từ Robot 1 rồi mới chạy tiếp
+    const hd = downSensors(theta);
+    const h1Hit = hd[0] < LP_DETECT, h2Hit = hd[1] < LP_DETECT;
+    if (!cLP.checked || mode === 'stop') {
+      if (lpState === 'wait') lpState = 'leave';
+      else if (lpState === 'leave' && !h1Hit && !h2Hit) lpState = 'none';
+    } else if (lpState === 'none' && h1Hit && h2Hit) {
+      lpState = 'wait';
+      transferDone = false;
+      requestTransfer(nearestLoadPort(theta));
+    } else if (lpState === 'wait' && transferDone) {
+      lpState = 'leave';
+      transferDone = false;
+      flipNoteUntil = -1;
+      lpDoneNoteUntil = simTime + 1.5;
+    } else if (lpState === 'leave' && !h1Hit && !h2Hit) {
+      lpState = 'none';
+    }
+    const dwelling = lpState === 'wait';
+
+    robotStep(h);
+
+    if (dwelling) {
+      note = 'TH1: H1 và H2 thấy Load Port → DỪNG, chờ Robot 1: ' + rb.status.toLowerCase();
+      warn = true;
+    } else if (simTime < lpDoneNoteUntil) {
+      note = 'Robot 1 đã đặt wafer, gửi tín hiệu → xe dò line chạy tiếp.';
+    }
+    if (dwelling) {
+      // đứng yên
+    } else if (mode === 'auto') {
+      const ahead = dir > 0 ? gp.front : gp.rear;
+      if (ahead < DETECT && simTime - lastFlip > 0.6) {
+        dir = -dir;
+        lastFlip = simTime;
+        flipNoteUntil = simTime + 2.2;
+      }
+      const ahead2 = dir > 0 ? gp.front : gp.rear;
+      v = ahead2 > 1 ? dir * SPEED : 0;
+      if (simTime < flipNoteUntil) {
+        note = 'TH2: ' + (dir < 0 ? 'H3 (đầu xe)' : 'H4 (cuối xe)') + ' gặp xe đối thủ < 10 cm → đảo chiều, đổi dãy dò line.';
+        warn = true;
+      }
+    } else if (mode === 'fwd') {
+      v = gp.front > 1 ? SPEED : 0;
+      if (!v) { note = 'Sắp chạm xe đối thủ phía trước → dừng.'; warn = true; }
+    } else if (mode === 'rev') {
+      v = gp.rear > 1 ? -SPEED : 0;
+      if (!v) { note = 'Sắp chạm xe đối thủ phía sau → dừng.'; warn = true; }
+    }
+    const dTh = v * h / RC;
+    theta = wrap(theta + dTh);
+
+    // Bánh xe: bánh phía ngoài vòng đi quãng đường dài hơn bánh phía trong
+    for (const w of myWheels) {
+      const rr = RC - w.userData.side * WHEEL_Z;      // side +1 (bên phải xe) nằm phía trong vòng
+      w.rotation.z -= dTh * rr / R;
+    }
+    for (const w of oppWheels) w.rotation.z -= Math.abs(dThO) * RC / R;
+
+    return { moving: Math.abs(dTh) > 1e-9, gp: gaps(), hd: downSensors(theta), dwelling, note, warn };
+  }
+
+  const clock = new THREE.Clock();
+  function tick() {
+    const dt = Math.min(clock.getDelta(), 0.05);
+    const total = dt * Number(simSpeed.value);
+    const n = Math.max(1, Math.ceil(total / 0.01));    // chia nhỏ để 2 xe không chạy xuyên qua nhau
+    const oldPos = car.position.clone();
+    let info = null;
+    for (let i = 0; i < n; i++) info = step(total / n);
+
+    placeOnCircle(car, theta, 1);
+    placeOnCircle(opp, thetaO, oppFacing);
+    drawRobot();
+    dieLit.emissiveIntensity = 0.55 + 0.45 * Math.sin(performance.now() / 160);   // ô đích nhấp nháy
+
+    if (cFollow.checked && !camAnim) {
+      const delta = car.position.clone().sub(oldPos);
+      camera.position.add(delta);
+      controls.target.add(delta);
+    }
+    if (camAnim) {
+      camAnim.t = Math.min(1, camAnim.t + dt / 0.8);
+      const k = camAnim.t < 0.5 ? 2 * camAnim.t * camAnim.t : 1 - Math.pow(-2 * camAnim.t + 2, 2) / 2;
+      camera.position.lerpVectors(camAnim.fromPos, camAnim.toPos, k);
+      controls.target.lerpVectors(camAnim.fromTgt, camAnim.toTgt, k);
+      if (camAnim.t >= 1) camAnim = null;
+    }
+
+    // Nhìn từ gầm xe: làm sàn trong suốt để thấy cảm biến bên dưới
+    const below = camera.position.y < 0.6;
+    floorMat.opacity = below ? 0.15 : 1;
+    floorMat.depthWrite = !below;
+    outsideMat.opacity = below ? 0.1 : 1;
+    outsideMat.depthWrite = !below;
+    lineMat.opacity = below ? 0.35 : 1;
+
+    showStatus(info.moving, info.gp, info.hd, info.dwelling, info.note, info.warn);
+
+    controls.update();
+    renderer.render(scene, camera);
+    labelRenderer.render(scene, camera);
+    requestAnimationFrame(tick);
+  }
+
+  addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+    labelRenderer.setSize(innerWidth, innerHeight);
+  });
+
+  tick();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+CONFIG_IDF_TARGET="esp32s3"
+# Tick 1 ms để vòng điều khiển chạy được chu kỳ vài ms
+CONFIG_FREERTOS_HZ=1000
+# Log qua cổng USB tích hợp (USB-Serial-JTAG) của ESP32-S3
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y

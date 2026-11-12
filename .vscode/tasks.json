@@ -1,0 +1,41 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "ESP32: Build",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\tools\\idf.ps1", "build"],
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true, "focus": false },
+            "problemMatcher": []
+        },
+        {
+            "label": "ESP32: Flash",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\tools\\idf.ps1", "flash"],
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true, "focus": false },
+            "runOptions": { "instanceLimit": 1, "instancePolicy": "terminateOldest" },
+            "problemMatcher": []
+        },
+        {
+            "label": "ESP32: Flash + Monitor",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\tools\\idf.ps1", "flash", "monitor"],
+            "group": { "kind": "build", "isDefault": true },
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true, "focus": true },
+            "runOptions": { "instanceLimit": 1, "instancePolicy": "terminateOldest" },
+            "problemMatcher": []
+        },
+        {
+            "label": "ESP32: Monitor",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\tools\\idf.ps1", "monitor"],
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true, "focus": true },
+            "runOptions": { "instanceLimit": 1, "instancePolicy": "terminateOldest" },
+            "problemMatcher": []
+        }
+    ]
+}
